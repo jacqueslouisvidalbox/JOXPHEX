@@ -828,3 +828,338 @@ kbd {
   border-top: 0.5px solid var(--line);
   background: var(--bg);
 }
+
+/* =========================================================
+   RESPONSIVE — MOBILE OVERRIDES (≤ 768px)
+   Desktop styles above this query are left untouched.
+   ========================================================= */
+
+/* Mobile-only elements are hidden on desktop. Each element re-asserts
+   its own display value inside the media query below. */
+.mobile-only { display: none; }
+
+@media (max-width: 768px) {
+  /* ----- LAYOUT ----- */
+  .app {
+    grid-template-columns: 1fr;
+    grid-template-rows: 50px 1fr;
+    grid-template-areas:
+      "head"
+      "main";
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  /* Desktop footer and floating controls are replaced by the mobile bar. */
+  .foot { display: none; }
+  .viewport-controls { display: none; }
+
+  /* ----- HEADER ----- */
+  .head {
+    padding-top: env(safe-area-inset-top, 0);
+    height: calc(50px + env(safe-area-inset-top, 0));
+  }
+  .head .meta { display: none; }
+  .head .brand {
+    padding: 0 10px;
+    border-right: none;
+    gap: 10px;
+    flex: 1;
+  }
+  .head .brand .glyph { width: 28px; height: 28px; }
+  .head .brand .wordmark .jox  { font-size: 11px; }
+  .head .brand .wordmark .phex { font-size: 16px; }
+
+  .mobile-head-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 36px;
+    margin: 0 10px 0 auto;
+    background: transparent;
+    border: 1px solid #f5ecdc;
+    color: #f5ecdc;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    font-family: inherit;
+  }
+  .mobile-head-btn:active {
+    background: #f5ecdc;
+    color: #2e2117;
+  }
+
+  /* ----- LEFT / RIGHT BECOME DRAWERS ----- */
+  .left, .right {
+    position: fixed;
+    top: calc(50px + env(safe-area-inset-top, 0));
+    bottom: 0;
+    width: 85vw;
+    max-width: 360px;
+    z-index: 60;
+    background: var(--paper);
+    transition: transform 0.22s ease;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    border: none;
+  }
+  .left {
+    left: 0;
+    transform: translateX(-101%);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.25);
+  }
+  .right {
+    right: 0;
+    transform: translateX(101%);
+    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.25);
+  }
+  .left.mobile-open,
+  .right.mobile-open { transform: translateX(0); }
+
+  /* The right rail's params section is duplicated in the pinned tray on
+     mobile, so hide it inside the drawer to avoid redundancy. */
+  .right .params-section { display: none; }
+
+  /* ----- DRAWER BACKDROP ----- */
+  .drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 55;
+    animation: fade-in 0.18s ease;
+  }
+  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+  /* ----- MAIN / CANVAS ----- */
+  .canvas-wrap { padding: 12px; }
+  .canvas-frame {
+    box-shadow: 4px 4px 0 var(--line);
+  }
+  .canvas-viewport canvas {
+    /* Leave room for the fixed mobile bottom bar (and tray when shown). */
+    max-width: calc(100vw - 24px);
+    max-height: calc(100dvh - 50px - env(safe-area-inset-top, 0) - 80px - env(safe-area-inset-bottom, 0));
+  }
+  body.has-mobile-tray .canvas-viewport canvas {
+    max-height: calc(60dvh - 80px);
+  }
+
+  /* prevent iOS Safari from page-zooming on double-tap inside the canvas */
+  .canvas-viewport { touch-action: none; }
+
+  /* ----- EMPTY STATE ----- */
+  .empty-state {
+    max-width: 90vw;
+    padding: 28px 20px;
+  }
+  .empty-state h3 { font-size: 16px; }
+  .empty-state p { font-size: 12px; }
+  .empty-mobile-cta {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  .empty-mobile-cta .btn {
+    flex: 1;
+    padding: 14px 8px;
+    font-size: 12px;
+    box-shadow: 3px 3px 0 var(--line);
+  }
+
+  /* ----- PINNED PARAMS TRAY ----- */
+  .mobile-params-tray {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: calc(60px + env(safe-area-inset-bottom, 0));
+    background: var(--paper);
+    border-top: var(--border-w) solid var(--line);
+    z-index: 40;
+    max-height: 38vh;
+    box-shadow: 0 -4px 18px rgba(0, 0, 0, 0.18);
+  }
+  .mobile-params-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--fg);
+    color: var(--bg);
+    padding: 8px 10px;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+  .mpt-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .mpt-close {
+    background: transparent;
+    color: inherit;
+    border: 1px solid currentColor;
+    width: 28px; height: 28px;
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+    margin-left: 8px;
+  }
+  .mobile-params-body {
+    padding: 10px 12px 14px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* ----- MOBILE BOTTOM ACTION BAR ----- */
+  .mobile-action-bar {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    gap: 6px;
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0));
+    background: var(--bg);
+    border-top: var(--border-w) solid var(--line);
+    z-index: 35;
+  }
+  .ma-btn {
+    flex: 1;
+    min-height: 48px;
+    background: var(--paper);
+    color: var(--fg);
+    border: var(--border-w) solid var(--line);
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+    padding: 0 6px;
+    box-shadow: 2px 2px 0 var(--line);
+    transition: transform 0.06s, box-shadow 0.06s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .ma-btn.primary { background: var(--fg); color: var(--bg); }
+  .ma-btn.active  { background: var(--fg); color: var(--bg); }
+  .ma-btn:active:not(:disabled) {
+    transform: translate(2px, 2px);
+    box-shadow: 0 0 0 var(--line);
+  }
+  .ma-btn:disabled {
+    opacity: 0.32;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+  }
+
+  /* ----- BIGGER TOUCH TARGETS THROUGHOUT ----- */
+  .filter-btn {
+    padding: 13px 10px 13px 24px;
+    font-size: 12px;
+    min-height: 44px;
+  }
+  .group-header {
+    padding: 12px 10px;
+    font-size: 11px;
+    min-height: 42px;
+  }
+  .group-toggle-all { padding: 4px 10px; font-size: 10px; }
+  .panel-section h2 { padding: 11px 10px; font-size: 11px; }
+  .panel-body { padding: 12px 12px; }
+
+  .control { margin-bottom: 18px; }
+  .control input[type="range"] {
+    height: 36px;
+    padding: 0 4px;
+  }
+  .control input[type="range"]::-webkit-slider-runnable-track { height: 22px; }
+  .control input[type="range"]::-moz-range-track { height: 22px; }
+  .control input[type="range"]::-webkit-slider-thumb {
+    width: 22px;
+    height: 22px;
+  }
+  .control input[type="range"]::-moz-range-thumb {
+    width: 22px;
+    height: 22px;
+  }
+  .control .toggle button {
+    padding: 12px 6px;
+    font-size: 11px;
+    min-height: 42px;
+  }
+  /* font-size 16px+ on text inputs prevents iOS auto-zoom on focus */
+  .control select,
+  .control input[type="text"],
+  .control input[type="number"],
+  .control input[type="password"] {
+    padding: 11px 10px;
+    font-size: 16px;
+  }
+
+  .recipes-save input {
+    padding: 11px 10px;
+    font-size: 16px;
+  }
+  .recipe-save-btn {
+    padding: 0 14px;
+    min-height: 42px;
+    font-size: 11px;
+  }
+  .recipe-load {
+    padding: 12px 10px;
+    font-size: 11px;
+    min-height: 42px;
+  }
+  .recipe-del {
+    width: 42px;
+    min-height: 42px;
+    font-size: 12px;
+  }
+
+  .chain-row {
+    padding: 10px;
+    font-size: 12px;
+  }
+  .chain-row .chain-btn {
+    width: 36px;
+    height: 32px;
+    font-size: 12px;
+  }
+
+  .btn {
+    padding: 13px 16px;
+    font-size: 12px;
+  }
+
+  /* ----- MODAL ----- */
+  .modal {
+    min-width: 0;
+    width: 94vw;
+    max-width: 94vw;
+    max-height: 90dvh;
+  }
+  .modal-body {
+    padding: 8px;
+  }
+  .modal video {
+    max-height: 50dvh;
+  }
+  .modal-foot {
+    flex-wrap: wrap;
+    padding: 10px;
+  }
+  .modal-foot .btn {
+    flex: 1;
+    min-width: 90px;
+  }
+
+  /* clean body background on mobile — let the canvas pattern carry the look */
+  body { background-image: none; }
+}
+

@@ -8,7 +8,31 @@ import CameraModal from './components/CameraModal.jsx';
 import { applyChain } from './utils/chain.js';
 import { loadImageFromFile, drawImageToCanvas, exportCanvas, fitWithin } from './utils/image.js';
 
-const PREVIEW_MAX = 1100;
+const PREVIEW_MAX_DESKTOP = 1100;
+const PREVIEW_MAX_MOBILE = 600;
+const MOBILE_QUERY = '(max-width: 768px)';
+
+// Live media query — re-renders when the viewport crosses the breakpoint
+// (orientation change, window resize, etc).
+function useMediaQuery(query) {
+  const [matches, setMatches] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia
+      ? window.matchMedia(query).matches
+      : false
+  );
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia(query);
+    const handler = (e) => setMatches(e.matches);
+    if (mq.addEventListener) mq.addEventListener('change', handler);
+    else mq.addListener(handler);
+    return () => {
+      if (mq.removeEventListener) mq.removeEventListener('change', handler);
+      else mq.removeListener(handler);
+    };
+  }, [query]);
+  return matches;
+}
 
 let stepCounter = 0;
 const nextStepId = () => ++stepCounter;
@@ -34,6 +58,27 @@ export default function App() {
     return new Set(filterGroups.map((g) => g.id));
   });
   const [cameraOpen, setCameraOpen] = useState(false);
+  const isMobile = useMediaQuery(MOBILE_QUERY);
+  const previewMax = isMobile ? PREVIEW_MAX_MOBILE : PREVIEW_MAX_DESKTOP;
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [mobileSettingsOpen, setMobileSettingsOpen] = useState(false);
+
+  // Drawers are mobile-only; close them automatically if we cross back to desktop.
+  useEffect(() => {
+    if (!isMobile) {
+      setMobileFiltersOpen(false);
+      setMobileSettingsOpen(false);
+    }
+  }, [isMobile]);
+
+  // Tell CSS when the pinned mobile params tray is visible so the canvas can
+  // shrink to make room.
+  useEffect(() => {
+    const on = isMobile && selectedStepId != null;
+    document.body.classList.toggle('has-mobile-tray', on);
+    return () => document.body.classList.remove('has-mobile-tray');
+  }, [isMobile, selectedStepId]);
+
   const [recipes, setRecipes] = useState(() => {
     try {
       const saved = localStorage.getItem('phex.recipes');
@@ -171,7 +216,17 @@ export default function App() {
     };
     setChain((prev) => [...prev, step]);
     setSelectedStepId(step.id);
-  }, []);
+    // After adding a step on mobile, dismiss the filter drawer so the user
+    // can see the result and tweak params via the pinned tray.
+    if (isMobile) setMobileFiltersOpen(false);
+  }, [isMobile]);
+
+  // Selecting a step on mobile closes the settings drawer so the pinned
+  // params tray is visible against the live preview.
+  const selectStep = useCallback((id) => {
+    setSelectedStepId(id);
+    if (isMobile && id != null) setMobileSettingsOpen(false);
+  }, [isMobile]);
 
   const removeStep = useCallback((id) => {
     setChain((prev) => {
@@ -300,7 +355,7 @@ export default function App() {
       // Compute the ratio between this render's long edge and the preview's
       // long edge. Anything tagged pixelScale in a filter scales accordingly,
       // so a chain tuned in the preview produces the same look at any size.
-      const previewFit = fitWithin(sourceImage.width, sourceImage.height, PREVIEW_MAX, PREVIEW_MAX);
+      const previewFit = fitWithin(sourceImage.width, sourceImage.height, previewMax, previewMax);
       const previewLong = Math.max(previewFit.w, previewFit.h);
       const exportLong = Math.max(W, H);
       const renderScale = exportLong / previewLong;
@@ -338,9 +393,18 @@ export default function App() {
           {sourceImage && <span>SRC {sourceImage.width}×{sourceImage.height}</span>}
           <span>CHAIN ▸ {enabledCount} / {chain.length}</span>
         </div>
+        <button
+          className="mobile-only mobile-head-btn"
+          onClick={() => {
+            setMobileSettingsOpen((v) => !v);
+            setMobileFiltersOpen(false);
+          }}
+          aria-label="Open settings"
+          title="Settings"
+        >⚙</button>
       </header>
 
-      <aside className="left">
+      <aside className={`left ${mobileFiltersOpen ? 'mobile-open' : ''}`}>
         <div className="panel-section">
           <h2>
             FILTERS <span className="tag">{Object.keys(filters).length}</span>
@@ -408,17 +472,34 @@ export default function App() {
                 zoom={zoom} tx={tx} ty={ty}
                 setZoom={setZoom} setTx={setTx} setTy={setTy}
                 compareMode={compareMode}
+                previewMax={previewMax}
               />
             </div>
           ) : (
             <div className="empty-state">
               <div className="stripe" style={{ marginBottom: 20 }}></div>
               <h3>NO INPUT</h3>
-              <p>
-                Drop an image anywhere on the window, paste from clipboard
-                (⌘V), or use LOAD IMAGE. Then click any filter on the left to
-                start a chain.
-              </p>
+              {isMobile ? (
+                <>
+                  <p>Pick a photo from your library, or capture one with the camera.</p>
+                  <div className="empty-mobile-cta">
+                    <button
+                      className="btn full primary"
+                      onClick={() => fileRef.current?.click()}
+                    >⇪ LOAD</button>
+                    <button
+                      className="btn full"
+                      onClick={() => setCameraOpen(true)}
+                    >◉ CAMERA</button>
+                  </div>
+                </>
+              ) : (
+                <p>
+                  Drop an image anywhere on the window, paste from clipboard
+                  (⌘V), or use LOAD IMAGE. Then click any filter on the left to
+                  start a chain.
+                </p>
+              )}
               <div className="stripe" style={{ marginTop: 20 }}></div>
             </div>
           )}
@@ -447,7 +528,7 @@ export default function App() {
         )}
       </main>
 
-      <aside className="right">
+      <aside className={`right ${mobileSettingsOpen ? 'mobile-open' : ''}`}>
         <div className="panel-section">
           <h2>INPUT</h2>
           <div className="panel-body">
@@ -484,7 +565,7 @@ export default function App() {
               chain={chain}
               filters={filters}
               selectedStepId={selectedStepId}
-              onSelect={setSelectedStepId}
+              onSelect={selectStep}
               onToggle={toggleStep}
               onRemove={removeStep}
               onMove={moveStep}
@@ -507,7 +588,7 @@ export default function App() {
         </div>
 
         {selectedStep && selectedFilter && (
-          <div className="panel-section">
+          <div className="panel-section params-section">
             <h2>PARAMS ▸ {selectedFilter.name.toUpperCase()}</h2>
             <div className="panel-body">
               <FilterControls
@@ -578,6 +659,60 @@ export default function App() {
         <span className="spacer"></span>
         <span>{busy ? '⚙ PROCESSING' : '◉ IDLE'}</span>
       </footer>
+
+      {/* Mobile-only: dim backdrop behind drawers */}
+      {(mobileFiltersOpen || mobileSettingsOpen) && (
+        <div
+          className="drawer-backdrop"
+          onClick={() => { setMobileFiltersOpen(false); setMobileSettingsOpen(false); }}
+        />
+      )}
+
+      {/* Mobile-only: pinned params tray for the selected step */}
+      {selectedStep && selectedFilter && (
+        <div className="mobile-only mobile-params-tray">
+          <div className="mobile-params-head">
+            <span className="mpt-name">▸ {selectedFilter.name}</span>
+            <button
+              className="mpt-close"
+              onClick={() => setSelectedStepId(null)}
+              aria-label="Deselect step"
+            >✕</button>
+          </div>
+          <div className="mobile-params-body">
+            <FilterControls
+              filter={selectedFilter}
+              params={selectedStep.params}
+              onChange={onSetParam}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Mobile-only: bottom action bar */}
+      <div className="mobile-only mobile-action-bar">
+        <button
+          className="ma-btn"
+          onClick={() => {
+            setMobileFiltersOpen(true);
+            setMobileSettingsOpen(false);
+          }}
+          disabled={busy}
+        >+ FILTERS</button>
+        <button
+          className={`ma-btn ${compareMode ? 'active' : ''}`}
+          onPointerDown={(e) => { e.preventDefault(); if (sourceImage) setCompareMode(true); }}
+          onPointerUp={() => setCompareMode(false)}
+          onPointerLeave={() => setCompareMode(false)}
+          onPointerCancel={() => setCompareMode(false)}
+          disabled={!sourceImage}
+        >HOLD ORIG</button>
+        <button
+          className="ma-btn primary"
+          onClick={onExport}
+          disabled={!sourceImage || busy}
+        >EXPORT ▸</button>
+      </div>
 
       <CameraModal
         open={cameraOpen}
