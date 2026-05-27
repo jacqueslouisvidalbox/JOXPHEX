@@ -27,10 +27,7 @@ const PreviewCanvas = forwardRef(function PreviewCanvas(
   const pointersRef = useRef(new Map());          // pointerId -> {x, y}
   const gestureRef = useRef(null);                // {mode, ...}
 
-  // Live refs so handlers always read current state (avoid stale closures).
-  const zoomRef = useRef(zoom);   zoomRef.current = zoom;
-  const txRef   = useRef(tx);     txRef.current   = tx;
-  const tyRef   = useRef(ty);     tyRef.current   = ty;
+  // Live ref so handlers always read current state (avoid stale closures).
   const paintModeRef = useRef(paintMode); paintModeRef.current = paintMode;
 
   useImperativeHandle(ref, () => ({
@@ -164,21 +161,26 @@ const PreviewCanvas = forwardRef(function PreviewCanvas(
     }
   }, [tx, ty, zoom]);
 
-  // Convert screen coords → source-image coords using the current
-  // viewport transform and the cached preview-canvas dimensions.
+  // Convert screen coords → source-image coords.
+  //
+  // getBoundingClientRect() on the canvas reflects its CURRENTLY VISIBLE
+  // box on the page — already including both the translate/scale transform
+  // AND any CSS-level scaling (e.g., when max-height squeezes a tall
+  // preview to fit the main area). So the ratio
+  //   (clientPos - rect) / rect.size * source.size
+  // gives the true source pixel under the cursor regardless of zoom or
+  // CSS layout. Tracking tx/ty/zoom manually here was the source of the
+  // up-and-left offset bug.
   const screenToSource = useCallback((clientX, clientY) => {
     if (!source) return null;
-    const vp = viewportRef.current;
     const canvas = canvasRef.current;
-    if (!vp || !canvas || !canvas.width) return null;
-    const rect = vp.getBoundingClientRect();
-    const vx = clientX - rect.left;
-    const vy = clientY - rect.top;
-    const cx = (vx - txRef.current) / zoomRef.current;
-    const cy = (vy - tyRef.current) / zoomRef.current;
-    const fitScale = canvas.width / source.width;
-    if (fitScale === 0) return null;
-    return { x: cx / fitScale, y: cy / fitScale };
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
+    return {
+      x: (clientX - rect.left) * source.width  / rect.width,
+      y: (clientY - rect.top)  * source.height / rect.height
+    };
   }, [source]);
 
   const onPointerDown = (e) => {
