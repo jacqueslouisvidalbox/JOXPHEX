@@ -441,11 +441,21 @@ button, input, select, textarea {
   box-shadow: 0 0 0 var(--line);
 }
 .btn.primary {
-  background: var(--c-red);
-  color: var(--fg);
+  background: var(--c-yellow);
+  color: var(--c-red);
+  border-color: var(--line);
 }
 .btn.primary:hover {
-  background: var(--fg);
+  background: var(--c-red);
+  color: var(--c-yellow);
+}
+.btn.alt {
+  background: var(--c-red);
+  color: var(--c-yellow);
+  border-color: var(--line);
+}
+.btn.alt:hover {
+  background: var(--c-yellow);
   color: var(--c-red);
 }
 .btn.cta {

@@ -506,7 +506,7 @@ export default function App() {
                       onClick={() => fileRef.current?.click()}
                     >⇪ LOAD</button>
                     <button
-                      className="btn full"
+                      className="btn full alt"
                       onClick={() => setCameraOpen(true)}
                     >◉ CAMERA</button>
                   </div>
@@ -561,7 +561,7 @@ export default function App() {
               ⇪ LOAD IMAGE
             </button>
             <button
-              className="btn full"
+              className="btn full alt"
               style={{ marginTop: 6 }}
               onClick={() => setCameraOpen(true)}
               title="Capture from webcam"
@@ -586,7 +586,7 @@ export default function App() {
               className="file-input"
               onChange={(e) => onLoadBrush(e.target.files?.[0])}
             />
-            <button className="btn full" onClick={() => brushFileRef.current?.click()}>
+            <button className="btn full primary" onClick={() => brushFileRef.current?.click()}>
               ⇪ LOAD BRUSH
             </button>
             {brushImage ? (
