@@ -63,6 +63,7 @@ export default function App() {
   const previewMax = isMobile ? PREVIEW_MAX_MOBILE : PREVIEW_MAX_DESKTOP;
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [mobileSettingsOpen, setMobileSettingsOpen] = useState(false);
+  const [paramsTrayCollapsed, setParamsTrayCollapsed] = useState(false);
 
   // Drawers are mobile-only; close them automatically if we cross back to desktop.
   useEffect(() => {
@@ -72,13 +73,23 @@ export default function App() {
     }
   }, [isMobile]);
 
-  // Tell CSS when the pinned mobile params tray is visible so the canvas can
-  // shrink to make room.
+  // Tell CSS when the pinned mobile params tray is visible (and whether
+  // it's collapsed) so the canvas can claim the right amount of space.
   useEffect(() => {
     const on = isMobile && selectedStepId != null;
     document.body.classList.toggle('has-mobile-tray', on);
-    return () => document.body.classList.remove('has-mobile-tray');
-  }, [isMobile, selectedStepId]);
+    document.body.classList.toggle('has-mobile-tray-collapsed', on && paramsTrayCollapsed);
+    return () => {
+      document.body.classList.remove('has-mobile-tray');
+      document.body.classList.remove('has-mobile-tray-collapsed');
+    };
+  }, [isMobile, selectedStepId, paramsTrayCollapsed]);
+
+  // A newly-selected step expands the tray so the user immediately sees
+  // its controls. They can collapse it from there.
+  useEffect(() => {
+    if (selectedStepId != null) setParamsTrayCollapsed(false);
+  }, [selectedStepId]);
 
   const [recipes, setRecipes] = useState(() => {
     try {
@@ -998,24 +1009,36 @@ export default function App() {
         />
       )}
 
-      {/* Mobile-only: pinned params tray for the selected step */}
+      {/* Mobile-only: pinned params tray for the selected step.
+          Tap the header to collapse/expand so the canvas can be seen. */}
       {selectedStep && selectedFilter && (
-        <div className="mobile-only mobile-params-tray">
-          <div className="mobile-params-head">
-            <span className="mpt-name">▸ {selectedFilter.name}</span>
+        <div className={`mobile-only mobile-params-tray ${paramsTrayCollapsed ? 'collapsed' : ''}`}>
+          <div
+            className="mobile-params-head"
+            onClick={() => setParamsTrayCollapsed((c) => !c)}
+            role="button"
+            tabIndex={0}
+            title={paramsTrayCollapsed ? 'Expand controls' : 'Collapse to see canvas'}
+          >
+            <span className="mpt-chev" aria-hidden="true">
+              {paramsTrayCollapsed ? '▴' : '▾'}
+            </span>
+            <span className="mpt-name">{selectedFilter.name}</span>
             <button
               className="mpt-close"
-              onClick={() => setSelectedStepId(null)}
+              onClick={(e) => { e.stopPropagation(); setSelectedStepId(null); }}
               aria-label="Deselect step"
             >✕</button>
           </div>
-          <div className="mobile-params-body">
-            <FilterControls
-              filter={selectedFilter}
-              params={selectedStep.params}
-              onChange={onSetParam}
-            />
-          </div>
+          {!paramsTrayCollapsed && (
+            <div className="mobile-params-body">
+              <FilterControls
+                filter={selectedFilter}
+                params={selectedStep.params}
+                onChange={onSetParam}
+              />
+            </div>
+          )}
         </div>
       )}
 

@@ -1071,13 +1071,19 @@ kbd {
   .canvas-frame {
     box-shadow: 4px 4px 0 var(--line);
   }
+  /* Canvas max-height accounts for: header (50) + top safe-area +
+     action bar (80) + bottom safe-area + the currently-visible tray. */
   .canvas-viewport canvas {
-    /* Leave room for the fixed mobile bottom bar (and tray when shown). */
     max-width: calc(100vw - 24px);
-    max-height: calc(100dvh - 50px - env(safe-area-inset-top, 0) - 80px - env(safe-area-inset-bottom, 0));
+    max-height: calc(100dvh - 130px - env(safe-area-inset-top, 0) - env(safe-area-inset-bottom, 0));
   }
-  body.has-mobile-tray .canvas-viewport canvas {
-    max-height: calc(60dvh - 80px);
+  /* Tray collapsed → tray uses just its ~52px header. */
+  body.has-mobile-tray.has-mobile-tray-collapsed .canvas-viewport canvas {
+    max-height: calc(100dvh - 182px - env(safe-area-inset-top, 0) - env(safe-area-inset-bottom, 0));
+  }
+  /* Tray expanded → reserve 38dvh for tray body. */
+  body.has-mobile-tray:not(.has-mobile-tray-collapsed) .canvas-viewport canvas {
+    max-height: calc(62dvh - 130px - env(safe-area-inset-top, 0) - env(safe-area-inset-bottom, 0));
   }
 
   /* prevent iOS Safari from page-zooming on double-tap inside the canvas */
@@ -1119,14 +1125,25 @@ kbd {
   .mobile-params-head {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 8px;
     background: var(--c-blue);
     color: var(--c-cream);
-    padding: 8px 10px;
+    padding: 10px 10px;
+    min-height: 44px;
     font-size: 11px;
     letter-spacing: 0.18em;
     text-transform: uppercase;
     font-weight: 700;
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: rgba(255,255,255,0.1);
+  }
+  .mpt-chev {
+    display: inline-block;
+    width: 14px;
+    font-size: 12px;
+    text-align: center;
+    line-height: 1;
   }
   .mpt-name {
     flex: 1;
@@ -1209,26 +1226,29 @@ kbd {
   .panel-section h2 { padding: 11px 10px; font-size: 11px; }
   .panel-body { padding: 12px 12px; }
 
-  .control { margin-bottom: 18px; }
+  .control { margin-bottom: 12px; }
   .control input[type="range"] {
-    height: 36px;
+    height: 30px;
     padding: 0 4px;
   }
-  .control input[type="range"]::-webkit-slider-runnable-track { height: 22px; }
-  .control input[type="range"]::-moz-range-track { height: 22px; }
+  .control input[type="range"]::-webkit-slider-runnable-track { height: 18px; }
+  .control input[type="range"]::-moz-range-track { height: 18px; }
   .control input[type="range"]::-webkit-slider-thumb {
-    width: 22px;
-    height: 22px;
+    width: 20px;
+    height: 20px;
   }
   .control input[type="range"]::-moz-range-thumb {
-    width: 22px;
-    height: 22px;
+    width: 20px;
+    height: 20px;
   }
   .control .toggle button {
-    padding: 12px 6px;
+    padding: 9px 6px;
     font-size: 11px;
-    min-height: 42px;
+    min-height: 36px;
   }
+  /* Tray body padding is already accounted for; keep params content
+     tight so even 3-4 controls fit without scroll. */
+  .mobile-params-body { padding: 10px 12px 12px; }
   /* font-size 16px+ on text inputs prevents iOS auto-zoom on focus */
   .control select,
   .control input[type="text"],
