@@ -94,6 +94,8 @@ export default function App() {
   const [brushImage, setBrushImage] = useState(null);
   // brushRect is in BRUSH-NATIVE pixel coordinates: {x, y, w, h} | null
   const [brushRect, setBrushRect] = useState(null);
+  // 0 = hard edge (no falloff), 1 = fully soft (alpha fades from center)
+  const [brushSoftness, setBrushSoftness] = useState(0);
   const brushDragRef = useRef(null);   // {startX, startY} during selection drag
 
   // Reset the selection rect whenever the brush itself changes.
@@ -111,23 +113,57 @@ export default function App() {
     };
   }, [brushImage]);
 
-  // The "effective brush" the rest of the app sees. If the user has
-  // selected a sub-rectangle, this is a cropped canvas of just that
-  // region. Otherwise it's the original brush image. Filters, paint
-  // mode, and export all read this; they don't know about the rect.
+  // The "effective brush" the rest of the app sees. Applies (a) any
+  // selection sub-rectangle and (b) a radial edge-softness mask. Filters,
+  // paint mode, and export all read this; they don't know about the
+  // raw rect or softness values.
   const effectiveBrush = useMemo(() => {
     if (!brushImage) return null;
-    if (!brushRect || brushRect.w < 2 || brushRect.h < 2) return brushImage;
-    const W = brushImage.width, H = brushImage.height;
-    const x = Math.max(0, Math.min(W - 1, brushRect.x));
-    const y = Math.max(0, Math.min(H - 1, brushRect.y));
-    const w = Math.max(1, Math.min(W - x, brushRect.w));
-    const h = Math.max(1, Math.min(H - y, brushRect.h));
-    const c = document.createElement('canvas');
-    c.width = w; c.height = h;
-    c.getContext('2d').drawImage(brushImage, x, y, w, h, 0, 0, w, h);
-    return c;
-  }, [brushImage, brushRect]);
+
+    // ----- 1. Crop to the selection rect, if any -----
+    let canvas;
+    const hasRect = brushRect && brushRect.w >= 2 && brushRect.h >= 2;
+    if (hasRect) {
+      const W = brushImage.width, H = brushImage.height;
+      const x = Math.max(0, Math.min(W - 1, brushRect.x));
+      const y = Math.max(0, Math.min(H - 1, brushRect.y));
+      const w = Math.max(1, Math.min(W - x, brushRect.w));
+      const h = Math.max(1, Math.min(H - y, brushRect.h));
+      canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(brushImage, x, y, w, h, 0, 0, w, h);
+    } else if (brushSoftness > 0) {
+      // Need a canvas to apply softness to.
+      canvas = document.createElement('canvas');
+      canvas.width = brushImage.width;
+      canvas.height = brushImage.height;
+      canvas.getContext('2d').drawImage(brushImage, 0, 0);
+    } else {
+      // No crop, no softness — return the raw image to avoid alloc.
+      return brushImage;
+    }
+
+    // ----- 2. Apply radial edge softness via destination-in mask -----
+    if (brushSoftness > 0) {
+      const w = canvas.width, h = canvas.height;
+      const ctx = canvas.getContext('2d');
+      const cx = w / 2, cy = h / 2;
+      const maxR = Math.hypot(cx, cy); // corners-to-center distance
+      // softness 0 → innerR = maxR (no falloff)
+      // softness 1 → innerR = 0    (full falloff from the center)
+      const innerR = Math.max(0, maxR * (1 - brushSoftness));
+      ctx.save();
+      ctx.globalCompositeOperation = 'destination-in';
+      const grad = ctx.createRadialGradient(cx, cy, innerR, cx, cy, maxR);
+      grad.addColorStop(0, 'rgba(0,0,0,1)');
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+      ctx.restore();
+    }
+
+    return canvas;
+  }, [brushImage, brushRect, brushSoftness]);
 
   // ----- Paint Mode -----
   // Strokes are stored in SOURCE-IMAGE coords so they survive
@@ -783,6 +819,16 @@ export default function App() {
                       title="Clear loaded brush"
                     >✕</button>
                   </div>
+                </div>
+
+                <div className="control" style={{ marginTop: 10, marginBottom: 0 }}>
+                  <label>EDGE SOFTNESS <span className="val">{Math.round(brushSoftness * 100)}%</span></label>
+                  <input
+                    type="range" min="0" max="1" step="0.02"
+                    value={brushSoftness}
+                    onChange={(e) => setBrushSoftness(parseFloat(e.target.value))}
+                    title="Radial alpha falloff from center to edge of the stamp"
+                  />
                 </div>
 
                 <button
