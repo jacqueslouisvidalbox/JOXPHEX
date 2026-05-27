@@ -1,17 +1,17 @@
-// Photo brush: stamps a user-supplied brush image many times across the
-// source. The brush is loaded into the global BRUSH slot in the right rail
-// and passed in via the chain's `context.brush`. Controls govern density,
-// scale, rotation, position jitter, opacity, and three colorize modes
-// (native brush colors, tinted by the underlying source pixel, or
+// Photo stamp: stamps a user-supplied image many times across the source on
+// a staggered grid. The stamp source is loaded into the global BRUSH slot
+// in the right rail and passed in via the chain's `context.brush`. Controls
+// govern density, scale, rotation, position jitter, opacity, and three
+// colorize modes (native colors, tinted by the underlying source pixel, or
 // flat-tinted with a chosen color).
 import { ctxOf } from './_common.js';
 import { mulberry32 } from '../utils/image.js';
 
 export default {
   id: 'photoBrush',
-  name: 'Photo Brush',
+  name: 'Photo Stamp',
   group: 'patterns',
-  notes: 'Stamps the loaded BRUSH image across the source. Load a brush in the right rail.',
+  notes: 'Stamps the loaded BRUSH image across the source on a staggered grid. Load an image in the BRUSH slot.',
   defaults: {
     spacing: 32,
     scale: 0.3,

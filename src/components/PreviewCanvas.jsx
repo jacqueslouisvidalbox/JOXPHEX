@@ -1,23 +1,37 @@
 import React, { useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { drawImageToCanvas, fitWithin } from '../utils/image.js';
 import { applyChain } from '../utils/chain.js';
+import { drawStrokes } from '../utils/paint.js';
 import { filters as registry } from '../filters/registry.js';
 
 const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 16;
 
 const PreviewCanvas = forwardRef(function PreviewCanvas(
-  { source, chain, onStatus, zoom, tx, ty, setZoom, setTx, setTy, compareMode, previewMax = 1100, brush = null },
+  {
+    source, chain, onStatus,
+    zoom, tx, ty, setZoom, setTx, setTy,
+    compareMode, previewMax = 1100, brush = null,
+    paintMode = false, strokes = [],
+    onStrokeStart, onStrokeExtend
+  },
   ref
 ) {
   const viewportRef = useRef(null);
   const canvasRef = useRef(null);
-  const sourceCanvasRef = useRef(null);
+  const sourceCanvasRef = useRef(null);   // cached source at preview resolution
   const sourceKeyRef = useRef(null);
+  const paintedSourceRef = useRef(null);  // reusable canvas for source + strokes composite
 
   // Multi-pointer gesture state.
   const pointersRef = useRef(new Map());          // pointerId -> {x, y}
   const gestureRef = useRef(null);                // {mode, ...}
+
+  // Live refs so handlers always read current state (avoid stale closures).
+  const zoomRef = useRef(zoom);   zoomRef.current = zoom;
+  const txRef   = useRef(tx);     txRef.current   = tx;
+  const tyRef   = useRef(ty);     tyRef.current   = ty;
+  const paintModeRef = useRef(paintMode); paintModeRef.current = paintMode;
 
   useImperativeHandle(ref, () => ({
     getViewportRect: () => viewportRef.current?.getBoundingClientRect() || null
@@ -53,11 +67,30 @@ const PreviewCanvas = forwardRef(function PreviewCanvas(
           onStatus?.(`◀ VIEWING ORIGINAL · ${w}×${h}`);
           return;
         }
-        await applyChain(sourceCanvasRef.current, dst, chain || [], registry, 1, { brush });
+
+        // Paint strokes feed into the chain by being composited onto the
+        // source first. The chain then processes (source + strokes).
+        let chainInput = sourceCanvasRef.current;
+        const hasStrokes = brush && strokes && strokes.length > 0;
+        if (hasStrokes) {
+          if (!paintedSourceRef.current) {
+            paintedSourceRef.current = document.createElement('canvas');
+          }
+          const ps = paintedSourceRef.current;
+          ps.width = w; ps.height = h;
+          const pctx = ps.getContext('2d');
+          pctx.clearRect(0, 0, w, h);
+          pctx.drawImage(sourceCanvasRef.current, 0, 0);
+          drawStrokes(strokes, brush, ps, source.width, source.height);
+          chainInput = ps;
+        }
+
+        await applyChain(chainInput, dst, chain || [], registry, 1, { brush });
         const ms = Math.round(performance.now() - t0);
         const enabled = (chain || []).filter((s) => s.enabled !== false).length;
-        if (enabled === 0) onStatus?.(`PREVIEW ${w}×${h} · RAW · ${ms}MS`);
-        else onStatus?.(`PREVIEW ${w}×${h} · ${enabled} STEP${enabled === 1 ? '' : 'S'} · ${ms}MS`);
+        const paintTag = hasStrokes ? ` · ${strokes.length} STROKE${strokes.length === 1 ? '' : 'S'}` : '';
+        if (enabled === 0) onStatus?.(`PREVIEW ${w}×${h} · RAW${paintTag} · ${ms}MS`);
+        else onStatus?.(`PREVIEW ${w}×${h} · ${enabled} STEP${enabled === 1 ? '' : 'S'}${paintTag} · ${ms}MS`);
       } catch (err) {
         console.error(err);
         onStatus?.(`ERR: ${err.message}`);
@@ -65,7 +98,7 @@ const PreviewCanvas = forwardRef(function PreviewCanvas(
     };
     const id = requestAnimationFrame(run);
     return () => cancelAnimationFrame(id);
-  }, [source, chain, onStatus, compareMode, previewMax, brush]);
+  }, [source, chain, onStatus, compareMode, previewMax, brush, strokes]);
 
   // ---- wheel zoom (desktop) ----
   const onWheel = useCallback((e) => {
@@ -131,9 +164,40 @@ const PreviewCanvas = forwardRef(function PreviewCanvas(
     }
   }, [tx, ty, zoom]);
 
+  // Convert screen coords → source-image coords using the current
+  // viewport transform and the cached preview-canvas dimensions.
+  const screenToSource = useCallback((clientX, clientY) => {
+    if (!source) return null;
+    const vp = viewportRef.current;
+    const canvas = canvasRef.current;
+    if (!vp || !canvas || !canvas.width) return null;
+    const rect = vp.getBoundingClientRect();
+    const vx = clientX - rect.left;
+    const vy = clientY - rect.top;
+    const cx = (vx - txRef.current) / zoomRef.current;
+    const cy = (vy - tyRef.current) / zoomRef.current;
+    const fitScale = canvas.width / source.width;
+    if (fitScale === 0) return null;
+    return { x: cx / fitScale, y: cy / fitScale };
+  }, [source]);
+
   const onPointerDown = (e) => {
     // Only react to primary button for mouse; touch/pen are always primary (button=0).
     if (e.pointerType === 'mouse' && e.button !== 0) return;
+
+    // PAINT MODE: first pointer becomes a stroke. Additional pointers in
+    // paint mode are ignored (we don't mix paint with pinch zoom — wheel
+    // zoom still works on desktop).
+    if (paintModeRef.current && pointersRef.current.size === 0) {
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
+      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const src = screenToSource(e.clientX, e.clientY);
+      if (src) onStrokeStart?.(src);
+      gestureRef.current = { mode: 'paint', pointerId: e.pointerId };
+      return;
+    }
+    if (paintModeRef.current) return; // ignore secondary pointers while painting
+
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
     pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     startGesture();
@@ -145,6 +209,13 @@ const PreviewCanvas = forwardRef(function PreviewCanvas(
     pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const g = gestureRef.current;
     if (!g) return;
+
+    if (g.mode === 'paint') {
+      if (e.pointerId !== g.pointerId) return;
+      const src = screenToSource(e.clientX, e.clientY);
+      if (src) onStrokeExtend?.(src);
+      return;
+    }
 
     if (g.mode === 'pan') {
       const pt = pointersRef.current.values().next().value;
@@ -182,21 +253,27 @@ const PreviewCanvas = forwardRef(function PreviewCanvas(
       pointersRef.current.delete(e.pointerId);
       try { e.currentTarget.releasePointerCapture(e.pointerId); } catch (_) {}
     }
+    const wasPaint = gestureRef.current?.mode === 'paint';
     if (pointersRef.current.size === 0) {
       gestureRef.current = null;
       e.currentTarget.classList.remove('grabbing');
-    } else {
+    } else if (!wasPaint) {
       // Restart with the remaining pointer(s) so we transition cleanly
-      // between pinch and pan modes mid-gesture.
+      // between pinch and pan modes mid-gesture. In paint mode we don't
+      // change gestures based on pointer count.
       startGesture();
     }
   };
 
-  const onDoubleClick = () => { setZoom(1); setTx(0); setTy(0); };
+  // In paint mode, double-click would otherwise reset zoom mid-stroke.
+  const onDoubleClick = () => {
+    if (paintModeRef.current) return;
+    setZoom(1); setTx(0); setTy(0);
+  };
 
   return (
     <div
-      className="canvas-viewport"
+      className={`canvas-viewport ${paintMode ? 'painting' : ''}`}
       ref={viewportRef}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}

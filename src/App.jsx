@@ -6,6 +6,7 @@ import ChainPanel from './components/ChainPanel.jsx';
 import RecipesPanel from './components/RecipesPanel.jsx';
 import CameraModal from './components/CameraModal.jsx';
 import { applyChain } from './utils/chain.js';
+import { drawStrokes } from './utils/paint.js';
 import { loadImageFromFile, drawImageToCanvas, exportCanvas, fitWithin } from './utils/image.js';
 
 const PREVIEW_MAX_DESKTOP = 1100;
@@ -90,6 +91,19 @@ export default function App() {
   const brushFileRef = useRef(null);
   const previewRef = useRef(null);
   const [brushImage, setBrushImage] = useState(null);
+
+  // ----- Paint Mode -----
+  // Strokes are stored in SOURCE-IMAGE coords so they survive
+  // preview/export resolution differences. Each stroke captures the paint
+  // settings active at the moment it was drawn. Strokes are session-only
+  // (intentionally not serialized into recipes).
+  const [paintMode, setPaintMode] = useState(false);
+  const [strokes, setStrokes] = useState([]);
+  const [paintSettings, setPaintSettings] = useState({
+    scale: 0.3,
+    opacity: 1,
+    spacing: 0.25
+  });
 
   useEffect(() => {
     try {
@@ -304,6 +318,37 @@ export default function App() {
     }
   }, []);
 
+  // Paint-mode stroke callbacks. PreviewCanvas calls these with points
+  // already converted into SOURCE-IMAGE coordinates.
+  const startStroke = useCallback((srcPt) => {
+    setStrokes((prev) => [
+      ...prev,
+      { points: [srcPt], settings: { ...paintSettings } }
+    ]);
+  }, [paintSettings]);
+
+  const extendStroke = useCallback((srcPt) => {
+    setStrokes((prev) => {
+      if (prev.length === 0) return prev;
+      const last = prev[prev.length - 1];
+      return [...prev.slice(0, -1), { ...last, points: [...last.points, srcPt] }];
+    });
+  }, []);
+
+  const undoStroke  = useCallback(() => setStrokes((prev) => prev.slice(0, -1)), []);
+  const clearStrokes = useCallback(() => setStrokes([]), []);
+
+  // Strokes are tied to a specific source image; reset on new source.
+  useEffect(() => {
+    setStrokes([]);
+    setPaintMode(false);
+  }, [sourceImage]);
+
+  // Paint mode needs a brush.
+  useEffect(() => {
+    if (!brushImage) setPaintMode(false);
+  }, [brushImage]);
+
   // Drag-and-drop anywhere on the document; paste from clipboard.
   const [dragHover, setDragHover] = useState(false);
   useEffect(() => {
@@ -367,6 +412,12 @@ export default function App() {
       src.width = dst.width = W;
       src.height = dst.height = H;
       drawImageToCanvas(sourceImage, src);
+      // Paint strokes are composited INTO the source so the chain processes
+      // them too. Points are in source-image coords; drawStrokes scales them
+      // to the export canvas size automatically.
+      if (strokes.length > 0 && brushImage) {
+        drawStrokes(strokes, brushImage, src, sourceImage.width, sourceImage.height);
+      }
       // Compute the ratio between this render's long edge and the preview's
       // long edge. Anything tagged pixelScale in a filter scales accordingly,
       // so a chain tuned in the preview produces the same look at any size.
@@ -491,6 +542,10 @@ export default function App() {
                 compareMode={compareMode}
                 previewMax={previewMax}
                 brush={brushImage}
+                paintMode={paintMode}
+                strokes={strokes}
+                onStrokeStart={startStroke}
+                onStrokeExtend={extendStroke}
               />
             </div>
           ) : (
@@ -590,20 +645,68 @@ export default function App() {
               ⇪ LOAD BRUSH
             </button>
             {brushImage ? (
-              <div className="brush-preview">
-                <img src={brushImage.src} alt="brush" />
-                <div className="brush-meta">
-                  <span>{brushImage.width}×{brushImage.height}</span>
-                  <button
-                    className="brush-clear"
-                    onClick={() => { setBrushImage(null); setStatus('BRUSH CLEARED'); }}
-                    title="Clear loaded brush"
-                  >✕</button>
+              <>
+                <div className="brush-preview">
+                  <img src={brushImage.src} alt="brush" />
+                  <div className="brush-meta">
+                    <span>{brushImage.width}×{brushImage.height}</span>
+                    <button
+                      className="brush-clear"
+                      onClick={() => { setBrushImage(null); setStatus('BRUSH CLEARED'); }}
+                      title="Clear loaded brush"
+                    >✕</button>
+                  </div>
                 </div>
-              </div>
+
+                <button
+                  className={`btn full ${paintMode ? 'cta' : 'alt'}`}
+                  style={{ marginTop: 10 }}
+                  disabled={!sourceImage}
+                  onClick={() => setPaintMode((p) => !p)}
+                  title={sourceImage ? 'Toggle paint mode' : 'Load an image first'}
+                >
+                  {paintMode ? '◉ PAINTING' : '🖌 PAINT MODE'}
+                </button>
+
+                {paintMode && (
+                  <div style={{ marginTop: 10 }}>
+                    <div className="control">
+                      <label>SIZE <span className="val">{paintSettings.scale.toFixed(2)}</span></label>
+                      <input
+                        type="range" min="0.05" max="2" step="0.05"
+                        value={paintSettings.scale}
+                        onChange={(e) => setPaintSettings((s) => ({ ...s, scale: parseFloat(e.target.value) }))}
+                      />
+                    </div>
+                    <div className="control">
+                      <label>OPACITY <span className="val">{paintSettings.opacity.toFixed(2)}</span></label>
+                      <input
+                        type="range" min="0.05" max="1" step="0.05"
+                        value={paintSettings.opacity}
+                        onChange={(e) => setPaintSettings((s) => ({ ...s, opacity: parseFloat(e.target.value) }))}
+                      />
+                    </div>
+                    <div className="control">
+                      <label>SPACING <span className="val">{paintSettings.spacing.toFixed(2)}</span></label>
+                      <input
+                        type="range" min="0.02" max="1" step="0.02"
+                        value={paintSettings.spacing}
+                        onChange={(e) => setPaintSettings((s) => ({ ...s, spacing: parseFloat(e.target.value) }))}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {strokes.length > 0 && (
+                  <div className="btn-row" style={{ marginTop: 6 }}>
+                    <button className="btn" onClick={undoStroke}>↶ UNDO</button>
+                    <button className="btn" onClick={clearStrokes}>✕ CLEAR ({strokes.length})</button>
+                  </div>
+                )}
+              </>
             ) : (
               <div style={{ marginTop: 8, fontSize: 10, color: 'var(--muted)', lineHeight: 1.4 }}>
-                // load a brush image to use with the Photo&nbsp;Brush filter
+                // load a brush to use with Photo Stamp filter or Paint Mode
               </div>
             )}
           </div>

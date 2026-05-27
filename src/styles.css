@@ -528,6 +528,8 @@ button, input, select, textarea {
   user-select: none;
 }
 .canvas-viewport.grabbing { cursor: grabbing; }
+.canvas-viewport.painting { cursor: crosshair; }
+.canvas-viewport.painting.grabbing { cursor: crosshair; }
 
 .canvas-viewport canvas {
   display: block;
