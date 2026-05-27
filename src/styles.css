@@ -1114,20 +1114,27 @@ kbd {
      Fixed expanded height so every filter looks the same; tall filters
      scroll inside. When `.collapsed`, only the head shows. */
   .mobile-params-tray {
-    display: flex;
-    flex-direction: column;
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: calc(60px + env(safe-area-inset-bottom, 0));
+    display: flex !important;
+    flex-direction: column !important;
+    position: fixed !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: calc(60px + env(safe-area-inset-bottom, 0)) !important;
     background: var(--paper);
     border-top: var(--border-w) solid var(--line);
     z-index: 40;
-    height: 35dvh;
+    /* Fixed expanded height — clamp keeps it predictable on every device
+       (iPhone SE → iPad). dvh fallback inside the clamp so it adjusts to
+       address-bar state. The !important prevents any cached/conflicting
+       rule from overriding. */
+    height: clamp(260px, 35dvh, 400px) !important;
+    max-height: clamp(260px, 35dvh, 400px) !important;
+    overflow: hidden !important;
     box-shadow: 0 -4px 18px rgba(0, 0, 0, 0.18);
   }
   .mobile-params-tray.collapsed {
-    height: auto;
+    height: auto !important;
+    max-height: none !important;
   }
   .mobile-params-head {
     flex: 0 0 auto;
@@ -1251,13 +1258,13 @@ kbd {
     min-height: 36px;
   }
   /* Body fills the rest of the fixed-height tray, scrolling internally
-     for filters with many controls. min-height: 0 is essential — without
-     it, flex children refuse to shrink below content size. */
+     for filters with many controls. flex-basis 0 + min-height 0 forces
+     it to shrink below content size and use overflow-y for the rest. */
   .mobile-params-body {
-    flex: 1 1 auto;
-    min-height: 0;
+    flex: 1 1 0 !important;
+    min-height: 0 !important;
     padding: 10px 12px 12px;
-    overflow-y: auto;
+    overflow-y: auto !important;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
   }
