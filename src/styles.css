@@ -1081,9 +1081,11 @@ kbd {
   body.has-mobile-tray.has-mobile-tray-collapsed .canvas-viewport canvas {
     max-height: calc(100dvh - 182px - env(safe-area-inset-top, 0) - env(safe-area-inset-bottom, 0));
   }
-  /* Tray expanded → reserve 38dvh for tray body. */
+  /* Tray expanded → reserve a FIXED 35dvh for the tray (same height
+     regardless of which filter is selected). The image automatically
+     fits whatever remains. */
   body.has-mobile-tray:not(.has-mobile-tray-collapsed) .canvas-viewport canvas {
-    max-height: calc(62dvh - 130px - env(safe-area-inset-top, 0) - env(safe-area-inset-bottom, 0));
+    max-height: calc(65dvh - 130px - env(safe-area-inset-top, 0) - env(safe-area-inset-bottom, 0));
   }
 
   /* prevent iOS Safari from page-zooming on double-tap inside the canvas */
@@ -1108,7 +1110,9 @@ kbd {
     box-shadow: 3px 3px 0 var(--line);
   }
 
-  /* ----- PINNED PARAMS TRAY ----- */
+  /* ----- PINNED PARAMS TRAY -----
+     Fixed expanded height so every filter looks the same; tall filters
+     scroll inside. When `.collapsed`, only the head shows. */
   .mobile-params-tray {
     display: flex;
     flex-direction: column;
@@ -1119,10 +1123,14 @@ kbd {
     background: var(--paper);
     border-top: var(--border-w) solid var(--line);
     z-index: 40;
-    max-height: 38vh;
+    height: 35dvh;
     box-shadow: 0 -4px 18px rgba(0, 0, 0, 0.18);
   }
+  .mobile-params-tray.collapsed {
+    height: auto;
+  }
   .mobile-params-head {
+    flex: 0 0 auto;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -1161,11 +1169,7 @@ kbd {
     line-height: 1;
     margin-left: 8px;
   }
-  .mobile-params-body {
-    padding: 10px 12px 14px;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-  }
+  /* (mobile-params-body styles consolidated lower in this media block) */
 
   /* ----- MOBILE BOTTOM ACTION BAR ----- */
   .mobile-action-bar {
@@ -1246,9 +1250,17 @@ kbd {
     font-size: 11px;
     min-height: 36px;
   }
-  /* Tray body padding is already accounted for; keep params content
-     tight so even 3-4 controls fit without scroll. */
-  .mobile-params-body { padding: 10px 12px 12px; }
+  /* Body fills the rest of the fixed-height tray, scrolling internally
+     for filters with many controls. min-height: 0 is essential — without
+     it, flex children refuse to shrink below content size. */
+  .mobile-params-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 10px 12px 12px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
   /* font-size 16px+ on text inputs prevents iOS auto-zoom on focus */
   .control select,
   .control input[type="text"],
