@@ -201,12 +201,7 @@ const PreviewCanvas = forwardRef(function PreviewCanvas(
       try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
       pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
       const src = screenToSource(e.clientX, e.clientY);
-      if (src) {
-        onStrokeStart?.(src);
-        // Debug aid: surface the computed source coord so the user can
-        // verify the cursor-to-source mapping is on target.
-        onStatus?.(`PAINT @ src ${Math.round(src.x)}, ${Math.round(src.y)}`);
-      }
+      if (src) onStrokeStart?.(src);
       gestureRef.current = { mode: 'paint', pointerId: e.pointerId };
       return;
     }
