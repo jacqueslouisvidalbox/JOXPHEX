@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { filters, filterGroups } from './filters/registry.js';
 import PreviewCanvas, { MIN_ZOOM, MAX_ZOOM } from './components/PreviewCanvas.jsx';
 import FilterControls from './components/FilterControls.jsx';
@@ -90,7 +90,44 @@ export default function App() {
   const fileRef = useRef(null);
   const brushFileRef = useRef(null);
   const previewRef = useRef(null);
+  const brushPreviewRef = useRef(null);
   const [brushImage, setBrushImage] = useState(null);
+  // brushRect is in BRUSH-NATIVE pixel coordinates: {x, y, w, h} | null
+  const [brushRect, setBrushRect] = useState(null);
+  const brushDragRef = useRef(null);   // {startX, startY} during selection drag
+
+  // Reset the selection rect whenever the brush itself changes.
+  useEffect(() => { setBrushRect(null); }, [brushImage]);
+
+  // Display sizing for the brush-preview canvas (matches .brush-preview CSS).
+  const brushFit = useMemo(() => {
+    if (!brushImage) return null;
+    const maxW = 200, maxH = 110;
+    const s = Math.min(maxW / brushImage.width, maxH / brushImage.height, 1);
+    return {
+      previewW: Math.max(1, Math.round(brushImage.width * s)),
+      previewH: Math.max(1, Math.round(brushImage.height * s)),
+      scale: s
+    };
+  }, [brushImage]);
+
+  // The "effective brush" the rest of the app sees. If the user has
+  // selected a sub-rectangle, this is a cropped canvas of just that
+  // region. Otherwise it's the original brush image. Filters, paint
+  // mode, and export all read this; they don't know about the rect.
+  const effectiveBrush = useMemo(() => {
+    if (!brushImage) return null;
+    if (!brushRect || brushRect.w < 2 || brushRect.h < 2) return brushImage;
+    const W = brushImage.width, H = brushImage.height;
+    const x = Math.max(0, Math.min(W - 1, brushRect.x));
+    const y = Math.max(0, Math.min(H - 1, brushRect.y));
+    const w = Math.max(1, Math.min(W - x, brushRect.w));
+    const h = Math.max(1, Math.min(H - y, brushRect.h));
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    c.getContext('2d').drawImage(brushImage, x, y, w, h, 0, 0, w, h);
+    return c;
+  }, [brushImage, brushRect]);
 
   // ----- Paint Mode -----
   // Strokes are stored in SOURCE-IMAGE coords so they survive
@@ -349,6 +386,81 @@ export default function App() {
     if (!brushImage) setPaintMode(false);
   }, [brushImage]);
 
+  // Render the brush-preview canvas: the brush, plus a dim mask + yellow
+  // selection rectangle when the user has cropped a region.
+  useEffect(() => {
+    const canvas = brushPreviewRef.current;
+    if (!canvas || !brushImage || !brushFit) return;
+    const { previewW, previewH, scale } = brushFit;
+    canvas.width = previewW;
+    canvas.height = previewH;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, previewW, previewH);
+    ctx.drawImage(brushImage, 0, 0, previewW, previewH);
+
+    if (brushRect && brushRect.w >= 2 && brushRect.h >= 2) {
+      const rx = brushRect.x * scale;
+      const ry = brushRect.y * scale;
+      const rw = brushRect.w * scale;
+      const rh = brushRect.h * scale;
+      // Punched-out dim mask — outside selection darkens, inside stays bright.
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, previewW, previewH);
+      ctx.rect(rx, ry, rw, rh);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+      ctx.fill('evenodd');
+      ctx.restore();
+      // Yellow selection border.
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#f4d11f';
+      ctx.strokeRect(rx + 1, ry + 1, Math.max(0, rw - 2), Math.max(0, rh - 2));
+    }
+  }, [brushImage, brushRect, brushFit]);
+
+  // Pointer drag on the brush preview defines the selection rect.
+  const brushCanvasPos = (e) => {
+    const canvas = brushPreviewRef.current;
+    if (!canvas || !brushFit) return null;
+    const rect = canvas.getBoundingClientRect();
+    const sx = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const sy = (e.clientY - rect.top)  * (canvas.height / rect.height);
+    return {
+      bx: Math.round(sx / brushFit.scale),
+      by: Math.round(sy / brushFit.scale)
+    };
+  };
+
+  const onBrushSelectDown = (e) => {
+    if (!brushImage) return;
+    const pos = brushCanvasPos(e);
+    if (!pos) return;
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
+    brushDragRef.current = { startX: pos.bx, startY: pos.by };
+    setBrushRect({ x: pos.bx, y: pos.by, w: 0, h: 0 });
+  };
+
+  const onBrushSelectMove = (e) => {
+    if (!brushDragRef.current) return;
+    const pos = brushCanvasPos(e);
+    if (!pos) return;
+    const { startX, startY } = brushDragRef.current;
+    setBrushRect({
+      x: Math.min(startX, pos.bx),
+      y: Math.min(startY, pos.by),
+      w: Math.abs(pos.bx - startX),
+      h: Math.abs(pos.by - startY)
+    });
+  };
+
+  const onBrushSelectUp = (e) => {
+    if (!brushDragRef.current) return;
+    brushDragRef.current = null;
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch (_) {}
+    // Treat tiny accidental drags (just a click) as "clear selection".
+    setBrushRect((r) => (r && r.w >= 4 && r.h >= 4) ? r : null);
+  };
+
   // Drag-and-drop anywhere on the document; paste from clipboard.
   const [dragHover, setDragHover] = useState(false);
   useEffect(() => {
@@ -414,9 +526,10 @@ export default function App() {
       drawImageToCanvas(sourceImage, src);
       // Paint strokes are composited INTO the source so the chain processes
       // them too. Points are in source-image coords; drawStrokes scales them
-      // to the export canvas size automatically.
-      if (strokes.length > 0 && brushImage) {
-        drawStrokes(strokes, brushImage, src, sourceImage.width, sourceImage.height);
+      // to the export canvas size automatically. The effective brush
+      // already reflects any sub-region the user selected.
+      if (strokes.length > 0 && effectiveBrush) {
+        drawStrokes(strokes, effectiveBrush, src, sourceImage.width, sourceImage.height);
       }
       // Compute the ratio between this render's long edge and the preview's
       // long edge. Anything tagged pixelScale in a filter scales accordingly,
@@ -425,7 +538,7 @@ export default function App() {
       const previewLong = Math.max(previewFit.w, previewFit.h);
       const exportLong = Math.max(W, H);
       const renderScale = exportLong / previewLong;
-      await applyChain(src, dst, chain, filters, renderScale, { brush: brushImage });
+      await applyChain(src, dst, chain, filters, renderScale, { brush: effectiveBrush });
       const mime = exportFormat === 'jpg' ? 'image/jpeg' : 'image/png';
       const stamp = chain.length
         ? chain.filter(s => s.enabled !== false).map(s => s.filterId).join('-')
@@ -541,7 +654,7 @@ export default function App() {
                 setZoom={setZoom} setTx={setTx} setTy={setTy}
                 compareMode={compareMode}
                 previewMax={previewMax}
-                brush={brushImage}
+                brush={effectiveBrush}
                 paintMode={paintMode}
                 strokes={strokes}
                 onStrokeStart={startStroke}
@@ -647,9 +760,23 @@ export default function App() {
             {brushImage ? (
               <>
                 <div className="brush-preview">
-                  <img src={brushImage.src} alt="brush" />
+                  <canvas
+                    ref={brushPreviewRef}
+                    className="brush-canvas"
+                    onPointerDown={onBrushSelectDown}
+                    onPointerMove={onBrushSelectMove}
+                    onPointerUp={onBrushSelectUp}
+                    onPointerCancel={onBrushSelectUp}
+                    onDoubleClick={() => setBrushRect(null)}
+                    title="Drag to crop stamp · double-click to reset"
+                  />
                   <div className="brush-meta">
-                    <span>{brushImage.width}×{brushImage.height}</span>
+                    <span>
+                      {brushImage.width}×{brushImage.height}
+                      {brushRect && brushRect.w >= 2 && brushRect.h >= 2 && (
+                        <> → <strong>{brushRect.w}×{brushRect.h}</strong></>
+                      )}
+                    </span>
                     <button
                       className="brush-clear"
                       onClick={() => { setBrushImage(null); setStatus('BRUSH CLEARED'); }}
