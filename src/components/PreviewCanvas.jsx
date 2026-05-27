@@ -163,25 +163,32 @@ const PreviewCanvas = forwardRef(function PreviewCanvas(
 
   // Convert screen coords → source-image coords.
   //
-  // getBoundingClientRect() on the canvas reflects its CURRENTLY VISIBLE
-  // box on the page — already including both the translate/scale transform
-  // AND any CSS-level scaling (e.g., when max-height squeezes a tall
-  // preview to fit the main area). So the ratio
-  //   (clientPos - rect) / rect.size * source.size
-  // gives the true source pixel under the cursor regardless of zoom or
-  // CSS layout. Tracking tx/ty/zoom manually here was the source of the
-  // up-and-left offset bug.
+  // We use the VIEWPORT's rect as the stable reference frame (it never has
+  // a transform applied), then manually invert the canvas's transform.
+  // The canvas's natural CSS layout box sits at (0,0) of the viewport
+  // before its `transform: translate(tx, ty) scale(zoom)` is applied
+  // (with origin 0,0). So:
+  //   1. Convert clientX/Y → viewport-local CSS px
+  //   2. Subtract translate, divide by zoom → canvas-CSS-pixel coord
+  //   3. Scale by source.size / canvas.clientSize → source pixel
   const screenToSource = useCallback((clientX, clientY) => {
     if (!source) return null;
+    const vp = viewportRef.current;
     const canvas = canvasRef.current;
-    if (!canvas) return null;
-    const rect = canvas.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return null;
+    if (!vp || !canvas) return null;
+    const vpRect = vp.getBoundingClientRect();
+    const cssW = canvas.clientWidth  || canvas.width;
+    const cssH = canvas.clientHeight || canvas.height;
+    if (!cssW || !cssH) return null;
+    const vx = clientX - vpRect.left;
+    const vy = clientY - vpRect.top;
+    const cssX = (vx - tx) / zoom;
+    const cssY = (vy - ty) / zoom;
     return {
-      x: (clientX - rect.left) * source.width  / rect.width,
-      y: (clientY - rect.top)  * source.height / rect.height
+      x: cssX * source.width  / cssW,
+      y: cssY * source.height / cssH
     };
-  }, [source]);
+  }, [source, tx, ty, zoom]);
 
   const onPointerDown = (e) => {
     // Only react to primary button for mouse; touch/pen are always primary (button=0).
@@ -194,7 +201,12 @@ const PreviewCanvas = forwardRef(function PreviewCanvas(
       try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
       pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
       const src = screenToSource(e.clientX, e.clientY);
-      if (src) onStrokeStart?.(src);
+      if (src) {
+        onStrokeStart?.(src);
+        // Debug aid: surface the computed source coord so the user can
+        // verify the cursor-to-source mapping is on target.
+        onStatus?.(`PAINT @ src ${Math.round(src.x)}, ${Math.round(src.y)}`);
+      }
       gestureRef.current = { mode: 'paint', pointerId: e.pointerId };
       return;
     }
