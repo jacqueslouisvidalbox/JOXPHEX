@@ -618,7 +618,22 @@ button, input, select, textarea {
 }
 
 /* ---------- HIDDEN FILE INPUT ---------- */
-.file-input { display: none; }
+/* Using opacity + offscreen positioning instead of display:none —
+   iOS Safari refuses to open the file picker for programmatic .click()
+   on a display:none input, but works fine on an "invisible but rendered"
+   one. pointer-events:none keeps it from intercepting taps. */
+.file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
 
 /* ---------- KBD ---------- */
 kbd {
