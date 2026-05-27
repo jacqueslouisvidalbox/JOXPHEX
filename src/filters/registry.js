@@ -44,6 +44,7 @@ import photomosaic from './photomosaic.js';
 // Patterns
 import stripes from './stripes.js';
 import dots from './dots.js';
+import photoBrush from './photoBrush.js';
 
 // Edges & relief
 import sobel from './sobel.js';
@@ -78,7 +79,7 @@ const all = [
   halftone, lineScreen, stipple, crosshatch,
   twirl, pinch, ripple, kaleidoscope, barrelDistortion, mirrorSplit, slitScan, flowField,
   hexPixelate, voronoi, tile, photomosaic,
-  stripes, dots,
+  stripes, dots, photoBrush,
   sobel, contours, emboss,
   sketch, watercolor, cellShading, vignette, filmGrain, lensFlare,
   rgbShift, glitch,
@@ -122,7 +123,7 @@ export const filterGroups = [
   {
     id: 'patterns',
     label: 'PATTERNS',
-    filters: ['stripes', 'dots']
+    filters: ['stripes', 'dots', 'photoBrush']
   },
   {
     id: 'edges',

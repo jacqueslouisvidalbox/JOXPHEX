@@ -7,7 +7,7 @@ const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 16;
 
 const PreviewCanvas = forwardRef(function PreviewCanvas(
-  { source, chain, onStatus, zoom, tx, ty, setZoom, setTx, setTy, compareMode, previewMax = 1100 },
+  { source, chain, onStatus, zoom, tx, ty, setZoom, setTx, setTy, compareMode, previewMax = 1100, brush = null },
   ref
 ) {
   const viewportRef = useRef(null);
@@ -53,7 +53,7 @@ const PreviewCanvas = forwardRef(function PreviewCanvas(
           onStatus?.(`◀ VIEWING ORIGINAL · ${w}×${h}`);
           return;
         }
-        await applyChain(sourceCanvasRef.current, dst, chain || [], registry);
+        await applyChain(sourceCanvasRef.current, dst, chain || [], registry, 1, { brush });
         const ms = Math.round(performance.now() - t0);
         const enabled = (chain || []).filter((s) => s.enabled !== false).length;
         if (enabled === 0) onStatus?.(`PREVIEW ${w}×${h} · RAW · ${ms}MS`);
@@ -65,7 +65,7 @@ const PreviewCanvas = forwardRef(function PreviewCanvas(
     };
     const id = requestAnimationFrame(run);
     return () => cancelAnimationFrame(id);
-  }, [source, chain, onStatus, compareMode, previewMax]);
+  }, [source, chain, onStatus, compareMode, previewMax, brush]);
 
   // ---- wheel zoom (desktop) ----
   const onWheel = useCallback((e) => {

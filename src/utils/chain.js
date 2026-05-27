@@ -24,7 +24,10 @@ export function scaleParams(filter, params, scale) {
   return out;
 }
 
-export async function applyChain(srcCanvas, dstCanvas, chain, filters, scale = 1) {
+// `context` carries optional resources that a filter may consult — for
+// instance, the currently-loaded "brush" image used by photoBrush. Filters
+// that don't need it ignore the fourth argument.
+export async function applyChain(srcCanvas, dstCanvas, chain, filters, scale = 1, context = {}) {
   const W = srcCanvas.width;
   const H = srcCanvas.height;
   dstCanvas.width = W;
@@ -44,7 +47,7 @@ export async function applyChain(srcCanvas, dstCanvas, chain, filters, scale = 1
   if (steps.length === 1) {
     const f = filters[steps[0].filterId];
     if (!f) return;
-    await f.apply(srcCanvas, dstCanvas, scaleParams(f, steps[0].params, scale));
+    await f.apply(srcCanvas, dstCanvas, scaleParams(f, steps[0].params, scale), context);
     return;
   }
 
@@ -64,7 +67,7 @@ export async function applyChain(srcCanvas, dstCanvas, chain, filters, scale = 1
     // Last step writes directly into dstCanvas to skip a final copy.
     const target = (i === steps.length - 1) ? dstCanvas : next;
     target.width = W; target.height = H;
-    await f.apply(cur, target, scaleParams(f, step.params, scale));
+    await f.apply(cur, target, scaleParams(f, step.params, scale), context);
     if (i !== steps.length - 1) {
       [cur, next] = [next, cur];
     }

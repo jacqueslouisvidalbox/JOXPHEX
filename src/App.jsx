@@ -87,7 +87,9 @@ export default function App() {
     return {};
   });
   const fileRef = useRef(null);
+  const brushFileRef = useRef(null);
   const previewRef = useRef(null);
+  const [brushImage, setBrushImage] = useState(null);
 
   useEffect(() => {
     try {
@@ -289,6 +291,19 @@ export default function App() {
     }
   }, []);
 
+  // Brush slot — a second image read by filters that paint with stamps
+  // (currently just photoBrush). Lives in-session only.
+  const onLoadBrush = useCallback(async (file) => {
+    if (!file) return;
+    try {
+      const img = await loadImageFromFile(file);
+      setBrushImage(img);
+      setStatus(`BRUSH LOADED · ${img.width}×${img.height}`);
+    } catch (err) {
+      setStatus(`BRUSH ERROR: ${err.message}`);
+    }
+  }, []);
+
   // Drag-and-drop anywhere on the document; paste from clipboard.
   const [dragHover, setDragHover] = useState(false);
   useEffect(() => {
@@ -359,7 +374,7 @@ export default function App() {
       const previewLong = Math.max(previewFit.w, previewFit.h);
       const exportLong = Math.max(W, H);
       const renderScale = exportLong / previewLong;
-      await applyChain(src, dst, chain, filters, renderScale);
+      await applyChain(src, dst, chain, filters, renderScale, { brush: brushImage });
       const mime = exportFormat === 'jpg' ? 'image/jpeg' : 'image/png';
       const stamp = chain.length
         ? chain.filter(s => s.enabled !== false).map(s => s.filterId).join('-')
@@ -385,7 +400,9 @@ export default function App() {
           <span className="glyph" aria-hidden="true"></span>
           <span className="wordmark">
             <span className="line jox">JOX</span>
-            <span className="line phex">PHEX</span>
+            <span className="line phex">
+              <span>P</span><span>H</span><span>E</span><span>X</span>
+            </span>
           </span>
         </div>
         <div className="meta">
@@ -473,6 +490,7 @@ export default function App() {
                 setZoom={setZoom} setTx={setTx} setTy={setTy}
                 compareMode={compareMode}
                 previewMax={previewMax}
+                brush={brushImage}
               />
             </div>
           ) : (
@@ -553,6 +571,39 @@ export default function App() {
             {sourceImage && (
               <div style={{ marginTop: 10, fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--muted)' }}>
                 {sourceImage.width} × {sourceImage.height} px
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="panel-section">
+          <h2>BRUSH {brushImage && <span className="tag">●</span>}</h2>
+          <div className="panel-body">
+            <input
+              ref={brushFileRef}
+              type="file"
+              accept="image/*"
+              className="file-input"
+              onChange={(e) => onLoadBrush(e.target.files?.[0])}
+            />
+            <button className="btn full" onClick={() => brushFileRef.current?.click()}>
+              ⇪ LOAD BRUSH
+            </button>
+            {brushImage ? (
+              <div className="brush-preview">
+                <img src={brushImage.src} alt="brush" />
+                <div className="brush-meta">
+                  <span>{brushImage.width}×{brushImage.height}</span>
+                  <button
+                    className="brush-clear"
+                    onClick={() => { setBrushImage(null); setStatus('BRUSH CLEARED'); }}
+                    title="Clear loaded brush"
+                  >✕</button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ marginTop: 8, fontSize: 10, color: 'var(--muted)', lineHeight: 1.4 }}>
+                // load a brush image to use with the Photo&nbsp;Brush filter
               </div>
             )}
           </div>
@@ -647,7 +698,10 @@ export default function App() {
               disabled={!sourceImage || busy}
               onClick={onExport}
             >
-              ▸ EXPORT
+              <span className="cta-arrow">▸ </span>
+              <span className="cta-letters">
+                <span>E</span><span>X</span><span>P</span><span>O</span><span>R</span><span>T</span>
+              </span>
             </button>
           </div>
         </div>
@@ -711,7 +765,12 @@ export default function App() {
           className="ma-btn cta"
           onClick={onExport}
           disabled={!sourceImage || busy}
-        >EXPORT ▸</button>
+        >
+          <span className="cta-letters">
+            <span>E</span><span>X</span><span>P</span><span>O</span><span>R</span><span>T</span>
+          </span>
+          <span className="cta-arrow"> ▸</span>
+        </button>
       </div>
 
       <CameraModal
