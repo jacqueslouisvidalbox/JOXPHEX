@@ -605,7 +605,7 @@ export default function App() {
           </div>
         )}
 
-        <div className="panel-section">
+        <div className="panel-section cta-section">
           <h2>EXPORT</h2>
           <div className="panel-body">
             <div className="control">
@@ -643,7 +643,7 @@ export default function App() {
             </div>
 
             <button
-              className="btn full primary"
+              className="btn full cta"
               disabled={!sourceImage || busy}
               onClick={onExport}
             >
@@ -708,7 +708,7 @@ export default function App() {
           disabled={!sourceImage}
         >HOLD ORIG</button>
         <button
-          className="ma-btn primary"
+          className="ma-btn cta"
           onClick={onExport}
           disabled={!sourceImage || busy}
         >EXPORT ▸</button>
