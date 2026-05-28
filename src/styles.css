@@ -1068,6 +1068,13 @@ kbd {
 
   /* ----- MAIN / CANVAS ----- */
   .canvas-wrap { padding: 12px; }
+  /* When the params tray is showing, push the image to the TOP of the
+     canvas area instead of centering. This way the empty space goes
+     between image and tray, not above the image. */
+  body.has-mobile-tray .canvas-wrap {
+    align-items: flex-start;
+    padding-top: 16px;
+  }
   .canvas-frame {
     box-shadow: 4px 4px 0 var(--line);
   }
@@ -1081,11 +1088,12 @@ kbd {
   body.has-mobile-tray.has-mobile-tray-collapsed .canvas-viewport canvas {
     max-height: calc(100dvh - 182px - env(safe-area-inset-top, 0) - env(safe-area-inset-bottom, 0));
   }
-  /* Tray expanded → reserve a FIXED 35dvh for the tray (same height
+  /* Tray expanded → reserve a FIXED 320px for the tray (same height
      regardless of which filter is selected). The image automatically
-     fits whatever remains. */
+     fits whatever remains. Subtract: header(50) + 320 tray + 80 action
+     bar + safe areas. */
   body.has-mobile-tray:not(.has-mobile-tray-collapsed) .canvas-viewport canvas {
-    max-height: calc(65dvh - 130px - env(safe-area-inset-top, 0) - env(safe-area-inset-bottom, 0));
+    max-height: calc(100dvh - 450px - env(safe-area-inset-top, 0) - env(safe-area-inset-bottom, 0));
   }
 
   /* prevent iOS Safari from page-zooming on double-tap inside the canvas */
@@ -1123,12 +1131,11 @@ kbd {
     background: var(--paper);
     border-top: var(--border-w) solid var(--line);
     z-index: 40;
-    /* Fixed expanded height — clamp keeps it predictable on every device
-       (iPhone SE → iPad). dvh fallback inside the clamp so it adjusts to
-       address-bar state. The !important prevents any cached/conflicting
-       rule from overriding. */
-    height: clamp(260px, 35dvh, 400px) !important;
-    max-height: clamp(260px, 35dvh, 400px) !important;
+    /* Fixed pixel height — no clamp / dvh / vh because we've seen iOS
+       Safari render those values inconsistently. 320px is comfortable
+       across every device and unambiguous to every browser. */
+    height: 320px !important;
+    max-height: 320px !important;
     overflow: hidden !important;
     box-shadow: 0 -4px 18px rgba(0, 0, 0, 0.18);
   }
